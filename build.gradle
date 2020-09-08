@@ -1,0 +1,58 @@
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+    id 'org.jetbrains.kotlin.jvm' version "1.4.0"
+}
+ext{
+    gson = '2.8.5'
+    okhttp = '4.8.1'
+    coroutines = '1.3.9'
+    junit = '4.12'
+    log = '8.1.0'
+    kotlin = '1.4.0'
+}
+group 'tk.mallumo'
+version '1.9.0'
+
+repositories {
+    mavenCentral()
+    maven {
+        url = uri("https://mallumo.jfrog.io/artifactory/gradle-dev-local")
+    }
+}
+
+dependencies {
+    api "org.jetbrains.kotlin:kotlin-stdlib"
+    api "com.squareup.okhttp3:okhttp:$okhttp"
+    api "com.google.code.gson:gson:$gson"
+    api "tk.mallumo:log:$log"
+    api "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines"
+    testCompile "junit:junit:$junit"
+}
+
+
+publishing {
+    repositories {
+        maven {
+            name = "mallumo.jfrog.io"
+            url = project.findProperty("jfrog.url")
+            credentials {
+                username = project.findProperty("jfrog.name")
+                password = project.findProperty("jfrog.pass")
+            }
+        }
+        maven{
+            url = uri("/tmp/___")
+        }
+    }
+    publications {
+        gpr(MavenPublication) {
+            groupId = "$group"
+            artifactId = "${project.name}"
+            version = "$version"
+            artifact kotlinSourcesJar
+            from(components.java)
+        }
+    }
+}
