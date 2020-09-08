@@ -7,15 +7,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.internal.closeQuietly
 import tk.mallumo.http.http.Utils.MT_JSON
 import tk.mallumo.http.http.Utils.buildRequestUrl
 import tk.mallumo.http.http.Utils.buildResponse
-import tk.mallumo.log.log
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
+import java.lang.reflect.Method
 import java.net.URLEncoder
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -43,8 +45,8 @@ object http {
      */
     @Suppress("unused")
     class AuthBasic(name: String, pass: String) : Auth(
-        "Authorization",
-        Credentials.basic(name, pass, charset("UTF-8"))
+            key = "Authorization",
+            value = Credentials.basic(name, pass, charset("UTF-8"))
     )
 
     /**
@@ -57,12 +59,12 @@ object http {
      * @param isOk simply validation of data: ``code == 200 && data != null``
      */
     data class Response<T>(
-        val data: T?,
-        val code: Int,
-        val exception: Throwable? = null,
-        val message: String?,
-        val headers: Headers? = null,
-        val isOk: Boolean = code == 200 && data != null
+            val data: T?,
+            val code: Int,
+            val exception: Throwable? = null,
+            val message: String?,
+            val headers: Headers? = null,
+            val isOk: Boolean = code == 200 && data != null
     )
 
     /**
@@ -90,13 +92,13 @@ object http {
      * @see Utils.client
      */
     suspend inline fun <reified T : Any> get(
-        url: String,
-        queryParts: SortedMap<String, String> = sortedMapOf(),
-        headers: Map<String, String> = mapOf(),
-        auth: Auth? = null,
-        client: OkHttpClient = Utils.client,
-        loggerOUT: Boolean = false,
-        loggerIN: Boolean = false
+            url: String,
+            queryParts: SortedMap<String, String> = sortedMapOf(),
+            headers: Map<String, String> = mapOf(),
+            auth: Auth? = null,
+            client: OkHttpClient = Utils.client,
+            loggerOUT: Boolean = false,
+            loggerIN: Boolean = false
     ): Response<T> = withContext(Dispatchers.IO) {
 
         val id = Utils.requestID.getAndIncrement()
@@ -114,11 +116,11 @@ object http {
 
         try {
             buildResponse(client.newCall(request).await(), T::class).also {
-                if (loggerIN) log("($id) ${Utils.gson.toJson(it)}")
+                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
             }
         } catch (e: Throwable) {
-            Response<T>(null, code =-1, exception =  e,  message =e.message).also {
-                if (loggerIN) log("($id) ${Utils.gson.toJson(it)}")
+            Response<T>(null, code = -1, exception = e, message = e.message).also {
+                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
             }
 
         }
@@ -126,18 +128,18 @@ object http {
 
 
     suspend fun Call.await(): okhttp3.Response =
-        suspendCoroutine { content ->
-            enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    content.resumeWithException(e)
-                }
+            suspendCoroutine { content ->
+                enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        content.resumeWithException(e)
+                    }
 
-                override fun onResponse(call: Call, response: okhttp3.Response) {
-                    content.resume(response)
-                }
+                    override fun onResponse(call: Call, response: okhttp3.Response) {
+                        content.resume(response)
+                    }
 
-            })
-        }
+                })
+            }
 
     /**
      * ### Request method type of POST
@@ -152,7 +154,10 @@ object http {
      * #### Function requires body element
      *
      * * Map<*, *> -> parameters wiil be send as form body parameters
+     * * okhttp3.MultipartBody -> send without modifications
+     * * okhttp3.FormBody -> send without modifications
      * * String -> send as json with mime "application/json; charset=utf-8"
+     * * File -> send as multipart request with mime of file
      * * Object -> convert into json and send with mime "application/json; charset=utf-8"
      *
      * @param url server url
@@ -172,14 +177,14 @@ object http {
      */
     @Suppress("unused")
     suspend inline fun <reified T : Any> post(
-        url: String,
-        body: Any,
-        queryParts: SortedMap<String, String> = sortedMapOf(),
-        headers: Map<String, String> = mapOf(),
-        auth: Auth? = null,
-        client: OkHttpClient = Utils.client,
-        loggerOUT: Boolean = false,
-        loggerIN: Boolean = false
+            url: String,
+            body: Any,
+            queryParts: SortedMap<String, String> = sortedMapOf(),
+            headers: Map<String, String> = mapOf(),
+            auth: Auth? = null,
+            client: OkHttpClient = Utils.client,
+            loggerOUT: Boolean = false,
+            loggerIN: Boolean = false
     ): Response<T> = withContext(Dispatchers.IO) {
 
         val id = Utils.requestID.getAndIncrement()
@@ -189,22 +194,30 @@ object http {
             url(buildRequestUrl(url, queryParts))
             headers(headers)
             when (body) {
+                is MultipartBody -> {
+                    post(body)
+                }
+                is FormBody -> {
+                    post(body)
+                }
+                is File -> {
+                    val formBody: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
+                            .addFormDataPart("file", body.name, body.asRequestBody())
+                            .build()
+                    post(formBody)
+                }
                 is Map<*, *> -> {
                     val formBody = FormBody.Builder().apply {
                         body.filterKeys { it is String }
-                            .filterValues { it != null }
-                            .forEach {
-                                add(it.key.toString(), it.value.toString())
-                            }
+                                .filterValues { it != null }
+                                .forEach {
+                                    add(it.key.toString(), it.value.toString())
+                                }
                     }.build()
                     post(formBody)
                 }
-                is String -> {
-                    post(body.toRequestBody(MT_JSON))
-                }
-                else -> {
-                    post(Utils.gson.toJson(body).toRequestBody(MT_JSON))
-                }
+                is String -> post(body.toRequestBody(MT_JSON))
+                else -> post(Utils.gson.toJson(body).toRequestBody(MT_JSON))
             }
             auth?.also {
                 addHeader(it.key, it.value)
@@ -213,11 +226,11 @@ object http {
 
         try {
             buildResponse(client.newCall(request).await(), T::class).also {
-                if (loggerIN) log("($id) ${Utils.gson.toJson(it)}")
+                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
             }
         } catch (e: Throwable) {
-            Response<T>(null, -1, exception =  e, message =e.message).also {
-                if (loggerIN) log("($id) ${Utils.gson.toJson(it)}")
+            Response<T>(null, -1, exception = e, message = e.message).also {
+                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
             }
         }
     }
@@ -228,9 +241,9 @@ object http {
      */
     fun Request.Builder.headers(headers: Map<String, String>): Request.Builder {
         headers.filter { it.key.isNotEmpty() && it.value.isNotEmpty() }
-            .forEach {
-                addHeader(it.key, it.value)
-            }
+                .forEach {
+                    addHeader(it.key, it.value)
+                }
         return this
     }
 
@@ -259,10 +272,10 @@ object http {
          * customizable OkHttpClient instance
          */
         var client = OkHttpClient.Builder()
-            .connectTimeout(40L, TimeUnit.SECONDS)
-            .callTimeout(30L, TimeUnit.SECONDS)
-            .retryOnConnectionFailure(false)
-            .build()
+                .connectTimeout(40L, TimeUnit.SECONDS)
+                .callTimeout(30L, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(false)
+                .build()
 
 
         /**
@@ -278,6 +291,10 @@ object http {
                     url + queryParts.map {
                         "${it.key}/${URLEncoder.encode(it.value, "UTF-8")}"
                     }.joinToString("/")
+                            .let {
+                                if (url.endsWith("/")) it
+                                else "/$it"
+                            }
                 }
             } else url
         }
@@ -288,8 +305,8 @@ object http {
          */
         @Suppress("UNCHECKED_CAST")
         suspend fun <T : Any> buildResponse(
-            it: okhttp3.Response,
-            clazz: KClass<T>
+                it: okhttp3.Response,
+                clazz: KClass<T>
         ): Response<T> = withContext(Dispatchers.IO) {
 
             @Suppress("BlockingMethodInNonBlockingContext")
@@ -297,12 +314,12 @@ object http {
                 when (clazz) {
                     ByteArray::class -> {
                         it.body?.use { body ->
-                            Response(body.byteStream().readBytes() as T?, code = it.code,  message =it.message, headers = it.headers)
+                            Response(body.byteStream().readBytes() as T?, code = it.code, message = it.message, headers = it.headers)
                         } ?: Response(null as T?, code = it.code, message = it.message, headers = it.headers)
                     }
                     File::class -> {
 
-                        val outFile =  File.createTempFile("http.", ".cache")
+                        val outFile = File.createTempFile("http.", ".cache")
 
                         if (!outFile.exists()) outFile.createNewFile()
 
@@ -312,22 +329,22 @@ object http {
                     String::class -> {
                         it.body?.use { body ->
                             Response(
-                                String(body.byteStream().readBytes()) as T?,
-                                it.code,
-                                message = it.message,
-                                headers = it.headers
+                                    String(body.byteStream().readBytes()) as T?,
+                                    it.code,
+                                    message = it.message,
+                                    headers = it.headers
                             )
-                        } ?: Response(null as T?,code = it.code, message = it.message, headers = it.headers)
+                        } ?: Response(null as T?, code = it.code, message = it.message, headers = it.headers)
                     }
                     else -> {
                         it.body?.use { body ->
                             Response(
-                                gson.fromJson(String(body.byteStream().readBytes()), clazz.java),
-                                it.code,
-                                message = it.message,
-                                headers = it.headers
+                                    gson.fromJson(String(body.byteStream().readBytes()), clazz.java),
+                                    it.code,
+                                    message = it.message,
+                                    headers = it.headers
                             )
-                        } ?: Response(null as T?,code = it.code,  message =it.message, headers = it.headers)
+                        } ?: Response(null as T?, code = it.code, message = it.message, headers = it.headers)
                     }
                 }
             } else {
@@ -361,53 +378,85 @@ object http {
          * curl builder of request POST
          */
         fun loggerOutPOST(
-            id: Int,
-            url: String,
-            body: Any,
-            queryParts: SortedMap<String, String>,
-            headers: Map<String, String>,
-            auth: Auth?
+                id: Int,
+                url: String,
+                body: Any,
+                queryParts: SortedMap<String, String>,
+                headers: Map<String, String>,
+                auth: Auth?
         ) {
 
-            val builder = StringBuilder("($id) curl -X POST \\")
-            auth?.also {
-                builder.append(" -H '${it.key}: ${it.value}'")
+            StringBuilder("($id) curl -X POST ").apply {
+                auth?.also {
+                    append(" -H '${it.key}: ${it.value}'")
+                }
+                headers.forEach {
+                    append(" -H '${it.key}: ${it.value}'")
+                }
+                when (body) {
+                    is FormBody -> append(" -d '?? -> FormBody <- ??'")
+                    is MultipartBody -> append(" -d '?? -> MultipartBody <- ??'")
+                    is File -> append(" --data-binary '@/${body.absolutePath}'")
+                    is Map<*, *> -> append(body.entries.joinToString { " -F '${it.key}=${it.value}'" })
+                    is String -> append(" -d '${body.toRequestBody(MT_JSON)}'")
+                    else -> append(" -d '${gson.toJson(body)}'")
+                }
+                if (body is String) {
+                    append(" -d '${body.toRequestBody(MT_JSON)}'")
+                } else {
+                    append(" -d '${gson.toJson(body)}'")
+                }
+                append(" ${buildRequestUrl(url, queryParts)}")
+                print(toString())
             }
-            headers.forEach {
-                builder.append(" -H '${it.key}: ${it.value}'")
-            }
-            if (body is String) {
-                builder.append(" -d '${body.toRequestBody(MT_JSON)}'")
-            } else {
-                builder.append(" -d '${gson.toJson(body)}'")
-            }
-            builder.append(" ${buildRequestUrl(url, queryParts)}")
-            log(builder.toString())
 
         }
+
         /**
          * curl builder of request GET
          */
         fun loggerOutGET(
-            id: Int,
-            url: String,
-            queryParts: SortedMap<String, String>,
-            headers: Map<String, String>,
-            auth: Auth?
+                id: Int,
+                url: String,
+                queryParts: SortedMap<String, String>,
+                headers: Map<String, String>,
+                auth: Auth?
         ) {
-            val builder = StringBuilder("($id) curl -X GET \\")
-            auth?.also {
-                builder.append(" -H '${it.key}: ${it.value}'")
+            StringBuilder("($id) curl -X GET ").apply {
+                auth?.also {
+                    append(" -H '${it.key}: ${it.value}'")
+                }
+                headers.forEach {
+                    append(" -H '${it.key}: ${it.value}'")
+                }
+                append(" ${buildRequestUrl(url, queryParts)}")
+
+                print(toString())
             }
-            headers.forEach {
-                builder.append(" -H '${it.key}: ${it.value}'")
-            }
-            builder.append(" ${buildRequestUrl(url, queryParts)}")
-            log(builder.toString())
+
 
         }
+
+        /**
+         * ### method reference of android function ```android.util.Log.e```
+         */
+        private val loggerMethod: Method? by lazy {
+            try {
+                Class.forName("android.util.Log")
+                        .getDeclaredMethod("e", String::class.java, String::class.java)
+            } catch (e: Throwable) {
+                null
+            }
+        }
+
+        /**
+         * print data to enciroment console output
+         */
+        fun print(data: String) {
+            loggerMethod?.also {
+                it.invoke(null, "http", data)
+            } ?: println("http: $data")
+        }
     }
-
-
 }
 
