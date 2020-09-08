@@ -21,7 +21,6 @@ version '2.0.0'
 repositories {
     mavenCentral()
     maven {
-//        url = uri("https://oss.sonatype.org/content/repositories/snapshots")
         url = uri("https://mallumo.jfrog.io/artifactory/gradle-dev-local")
     }
 }

@@ -1,5 +1,3 @@
-@file:Suppress("ClassName")
-
 package tk.mallumo.http
 
 import com.google.gson.Gson
@@ -27,7 +25,7 @@ import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 import kotlin.reflect.KClass
 
-
+@Suppress("ClassName")
 object http {
 
     /**
@@ -383,8 +381,7 @@ object http {
                 body: Any,
                 queryParts: SortedMap<String, String>,
                 headers: Map<String, String>,
-                auth: Auth?
-        ) {
+                auth: Auth?) {
 
             StringBuilder("($id) curl -X POST ").apply {
                 auth?.also {
@@ -397,7 +394,7 @@ object http {
                     is FormBody -> append(" -d '?? -> FormBody <- ??'")
                     is MultipartBody -> append(" -d '?? -> MultipartBody <- ??'")
                     is File -> append(" --data-binary '@/${body.absolutePath}'")
-                    is Map<*, *> -> append(body.entries.joinToString { " -F '${it.key}=${it.value}'" })
+                    is Map<*, *> -> append(body.entries.joinToString("") { " -F '${it.key}=${it.value}'" })
                     is String -> append(" -d '${body.toRequestBody(MT_JSON)}'")
                     else -> append(" -d '${gson.toJson(body)}'")
                 }
@@ -409,7 +406,6 @@ object http {
                 append(" ${buildRequestUrl(url, queryParts)}")
                 print(toString())
             }
-
         }
 
         /**
@@ -420,8 +416,8 @@ object http {
                 url: String,
                 queryParts: SortedMap<String, String>,
                 headers: Map<String, String>,
-                auth: Auth?
-        ) {
+                auth: Auth?) {
+
             StringBuilder("($id) curl -X GET ").apply {
                 auth?.also {
                     append(" -H '${it.key}: ${it.value}'")
@@ -433,8 +429,6 @@ object http {
 
                 print(toString())
             }
-
-
         }
 
         /**
@@ -450,7 +444,7 @@ object http {
         }
 
         /**
-         * print data to enciroment console output
+         * print data to environment console output
          */
         fun print(data: String) {
             loggerMethod?.also {
