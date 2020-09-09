@@ -1,19 +1,18 @@
-
+buildscript {
+    ext {
+        gson = '2.8.5'
+        okhttp = '4.8.1'
+        coroutines = '1.3.9'
+        junit = '4.12'
+        kotlinV = '1.4.0'
+    }
+}
 plugins {
-//noinspection GroovyAssignabilityCheck
     id 'java'
-//noinspection GroovyAssignabilityCheck
     id 'maven-publish'
-//noinspection GroovyAssignabilityCheck
-    id 'org.jetbrains.kotlin.jvm' version "1.4.0"
+    id 'org.jetbrains.kotlin.jvm' version "$kotlinV"
 }
-ext{
-    gson = '2.8.5'
-    okhttp = '4.8.1'
-    coroutines = '1.3.9'
-    junit = '4.12'
-    kotlin = '1.4.0'
-}
+
 group 'tk.mallumo'
 version '2.0.0'
 
@@ -32,21 +31,17 @@ dependencies {
     testCompile "junit:junit:$junit"
 }
 
-
 publishing {
     repositories {
         maven {
             name = "mallumo.jfrog.io"
-//noinspection GroovyAssignabilityCheck
             url = project.findProperty("jfrog.url")
             credentials {
-//noinspection GroovyAssignabilityCheck
                 username = project.findProperty("jfrog.name")
-//noinspection GroovyAssignabilityCheck
                 password = project.findProperty("jfrog.pass")
             }
         }
-        maven{
+        maven {
             url = uri("/tmp/___")
         }
     }
