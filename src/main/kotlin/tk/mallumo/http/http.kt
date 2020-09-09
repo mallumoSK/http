@@ -10,8 +10,10 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.internal.closeQuietly
 import tk.mallumo.http.http.Utils.MT_JSON
+import tk.mallumo.http.http.Utils.await
 import tk.mallumo.http.http.Utils.buildRequestUrl
 import tk.mallumo.http.http.Utils.buildResponse
+import tk.mallumo.http.http.Utils.headersMapper
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
@@ -54,26 +56,28 @@ object http {
      * @param exception is exception happens, this library newer throw exception **BUT** it will be returned by this parameter
      * @param message status message from server of extracted error message
      * @param headers server response headers
-     * @param isOk simply validation of data: ``code == 200 && data != null``
+     * @property isOk simply validation of data: ``code == 200 && data != null``
      */
     data class Response<T>(
             val data: T?,
             val code: Int,
             val exception: Throwable? = null,
             val message: String?,
-            val headers: Headers? = null,
-            val isOk: Boolean = code == 200 && data != null
-    )
+            val headers: Headers? = null) {
+        @Suppress("unused")
+        val isOk: Boolean
+            get() = code == 200 && data != null
+    }
 
     /**
      * ### Request method type of GET
      *
      * #### Function requires type of response classes
      *
-     * * ByteArray -> response cast read all bydes and forward back
+     * * ByteArray -> response read all bytes and forward back
      * * String -> response is converted to string
-     * * File -> in temporary files will be created file and fill with response data
-     * * else -> String from server will be classified as json and convert into forwarded type object type
+     * * File -> in temporary files will be created a file and fill with response data
+     * * else -> String from server will be classified as json and convert into forwarded class type
      *
      * @param url server url
      * @param queryParts if url ends with '?' this parameters will be used as url...?key1=value1&key2=value2 otherwise  url.../key1/value1/key2/value2
@@ -104,7 +108,7 @@ object http {
 
         val request = Request.Builder().apply {
             url(buildRequestUrl(url, queryParts))
-            headers(headers)
+            headersMapper(headers)
             get()
             auth?.also {
                 addHeader(it.key, it.value)
@@ -125,20 +129,6 @@ object http {
     }
 
 
-    suspend fun Call.await(): okhttp3.Response =
-            suspendCoroutine { content ->
-                enqueue(object : Callback {
-                    override fun onFailure(call: Call, e: IOException) {
-                        content.resumeWithException(e)
-                    }
-
-                    override fun onResponse(call: Call, response: okhttp3.Response) {
-                        content.resume(response)
-                    }
-
-                })
-            }
-
     /**
      * ### Request method type of POST
      *
@@ -149,9 +139,9 @@ object http {
      * * File -> in temporary files will be created file and fill with response data
      * * else -> String from server will be classified as json and convert into forwarded type object type
      *
-     * #### Function requires body element
+     * #### Function requires body parameter
      *
-     * * Map<*, *> -> parameters wiil be send as form body parameters
+     * * Map<*, *> -> parameters will be sent as form body parameters
      * * okhttp3.MultipartBody -> send without modifications
      * * okhttp3.FormBody -> send without modifications
      * * String -> send as json with mime "application/json; charset=utf-8"
@@ -190,7 +180,7 @@ object http {
 
         val request = Request.Builder().apply {
             url(buildRequestUrl(url, queryParts))
-            headers(headers)
+            headersMapper(headers)
             when (body) {
                 is MultipartBody -> {
                     post(body)
@@ -234,17 +224,6 @@ object http {
     }
 
 
-    /**
-     * headers builder
-     */
-    fun Request.Builder.headers(headers: Map<String, String>): Request.Builder {
-        headers.filter { it.key.isNotEmpty() && it.value.isNotEmpty() }
-                .forEach {
-                    addHeader(it.key, it.value)
-                }
-        return this
-    }
-
     object Utils {
 
         /**
@@ -275,6 +254,34 @@ object http {
                 .retryOnConnectionFailure(false)
                 .build()
 
+        /**
+         * await on response from server as suspendCoroutine
+         */
+        suspend fun Call.await(): okhttp3.Response =
+                suspendCoroutine { content ->
+                    enqueue(object : Callback {
+
+                        override fun onFailure(call: Call, e: IOException) {
+                            content.resumeWithException(e)
+                        }
+
+                        override fun onResponse(call: Call, response: okhttp3.Response) {
+                            content.resume(response)
+                        }
+
+                    })
+                }
+
+        /**
+         * headers builder
+         */
+        fun Request.Builder.headersMapper(headers: Map<String, String>): Request.Builder {
+            headers.filter { it.key.isNotEmpty() && it.value.isNotEmpty() }
+                    .forEach {
+                        addHeader(it.key, it.value)
+                    }
+            return this
+        }
 
         /**
          * url path builder
