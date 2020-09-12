@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -16,6 +17,7 @@ import tk.mallumo.http.http.Utils.buildResponse
 import tk.mallumo.http.http.Utils.headersMapper
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
 import java.lang.reflect.Method
 import java.net.URLEncoder
@@ -36,6 +38,54 @@ object http {
      * @param value your custom authenification value
      */
     open class Auth(val key: String, val value: String)
+
+    /**
+     * File uploading wrapper
+     *
+     * @param data content of uploading data
+     * @param contentType mime of content
+     * @param name name of datafile
+     * @param alias for backend identification
+     */
+    class HttpFile private constructor(private val data: Any,
+                                       private val contentType: String,
+                                       val name: String,
+                                       val alias: String) {
+
+        val requestBody: RequestBody
+            get() = when (data) {
+                is File -> data.asRequestBody(contentType.toMediaType())
+                is ByteArray -> data.toRequestBody(contentType.toMediaType())
+                is InputStream -> data.readBytes().toRequestBody(contentType.toMediaType())
+                else -> throw IllegalStateException("??? -> ${data::class.simpleName}")
+            }
+
+        companion object {
+            /**
+             * @see HttpFile
+             */
+            fun get(file: File,
+                    contentType: String,
+                    name: String = file.name,
+                    alias: String = "file"): HttpFile = HttpFile(file, contentType, name, alias)
+
+            /**
+             * @see HttpFile
+             */
+            fun get(byteArray: ByteArray,
+                    contentType: String,
+                    name: String,
+                    alias: String = "file"): HttpFile = HttpFile(byteArray, contentType, name, alias)
+
+            /**
+             * @see HttpFile
+             */
+            fun get(inputStream: InputStream,
+                    contentType: String,
+                    name: String,
+                    alias: String = "file"): HttpFile = HttpFile(inputStream, contentType, name, alias)
+        }
+    }
 
     /**
      * ### Implementation of Basic authentication
@@ -145,7 +195,7 @@ object http {
      * * okhttp3.MultipartBody -> send without modifications
      * * okhttp3.FormBody -> send without modifications
      * * String -> send as json with mime "application/json; charset=utf-8"
-     * * File -> send as multipart request with mime of file
+     * * HttpFile -> file wrapper
      * * Object -> convert into json and send with mime "application/json; charset=utf-8"
      *
      * @param url server url
@@ -162,6 +212,7 @@ object http {
      * @see Auth
      * @see Utils.gson
      * @see Utils.client
+     * @see HttpFile
      */
     @Suppress("unused")
     suspend inline fun <reified T : Any> post(
@@ -188,9 +239,9 @@ object http {
                 is FormBody -> {
                     post(body)
                 }
-                is File -> {
+                is HttpFile -> {
                     val formBody: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
-                            .addFormDataPart("file", body.name, body.asRequestBody())
+                            .addFormDataPart(body.alias, body.name, body.requestBody)
                             .build()
                     post(formBody)
                 }

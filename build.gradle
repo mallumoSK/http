@@ -5,22 +5,20 @@ buildscript {
         coroutines = '1.3.9'
         junit = '4.12'
         kotlinV = '1.4.0'
+        http_version = '2.0.1'
     }
 }
+
 plugins {
     id 'java'
     id 'maven-publish'
     id 'org.jetbrains.kotlin.jvm' version "$kotlinV"
 }
 
-group 'tk.mallumo'
-version '2.0.0'
+apply from: "secure.gradle"
 
 repositories {
     mavenCentral()
-    maven {
-        url = uri("https://mallumo.jfrog.io/artifactory/gradle-dev-local")
-    }
 }
 
 dependencies {
@@ -29,35 +27,4 @@ dependencies {
     api "com.google.code.gson:gson:$gson"
     api "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines"
     testCompile "junit:junit:$junit"
-}
-
-publishing {
-    repositories {
-        maven {
-            name = "mallumo.jfrog.io"
-            url = project.findProperty("jfrog.url")
-            credentials {
-                username = project.findProperty("jfrog.name")
-                password = project.findProperty("jfrog.pass")
-            }
-        }
-        maven {
-            url = uri("/tmp/___")
-        }
-    }
-    publications {
-//noinspection GroovyAssignabilityCheck
-        gpr(MavenPublication) {
-//noinspection GroovyAssignabilityCheck
-            groupId = "$group"
-//noinspection GroovyAssignabilityCheck
-            artifactId = "${project.name}"
-//noinspection GroovyAssignabilityCheck
-            version = "$version"
-//noinspection GroovyAssignabilityCheck
-            artifact kotlinSourcesJar
-//noinspection GroovyAssignabilityCheck
-            from(components.java)
-        }
-    }
 }

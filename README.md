@@ -12,7 +12,7 @@ repositories {
 }
 
 dependencies {
-    implementation "tk.mallumo:http:$version"
+    implementation "tk.mallumo:http:$http_version"
 }
 ```
 
@@ -24,6 +24,7 @@ ext{
     coroutines = '1.3.9'
     junit = '4.12'
     kotlin = '1.4.0'
+    http_version = '2.0.1'
 }
 dependencies {
     api "org.jetbrains.kotlin:kotlin-stdlib"
@@ -52,10 +53,10 @@ http.post<String>(url = "http://example.com",
 ### POST Function requires body parameter
 
 * Map<*, *> -> parameters will be sent as form body parameters
-* okhttp3.MultipartBody -> send without modifications
-* okhttp3.FormBody -> send without modifications
+* okhttp3.MultipartBody -> send without modifications.
+* okhttp3.FormBody -> send without modifications.
 * String -> send as json with mime "application/json; charset=utf-8"
-* File -> send as multipart request with mime of file
+* http.HttpFile -> wrapper for file sending. 
 * Object -> convert into json and send with mime "application/json; charset=utf-8"
 
 
