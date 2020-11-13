@@ -36,4 +36,20 @@ class TestHEAD {
                 }
         }
     }
+
+    @Test
+    fun test() {
+        runBlocking {
+            val data = "kaso.sk"
+            val urlsToCheck = arrayListOf<String>()
+            urlsToCheck.add("https://$data")
+            urlsToCheck.add("http://$data")
+            urlsToCheck.add("https://www.$data")
+            urlsToCheck.add("http://www.$data")
+            urlsToCheck.forEach {
+                val resp = http.head(it)
+                println("$it : ${resp.isOk}-> ${http.Utils.gson.toJson(resp)}")
+            }
+        }
+    }
 }

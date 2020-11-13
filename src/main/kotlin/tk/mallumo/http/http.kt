@@ -47,10 +47,12 @@ object http {
      * @param name name of datafile
      * @param alias for backend identification
      */
-    class HttpFile private constructor(private val data: Any,
-                                       private val contentType: String,
-                                       val name: String,
-                                       val alias: String) {
+    class HttpFile private constructor(
+        private val data: Any,
+        private val contentType: String,
+        val name: String,
+        val alias: String
+    ) {
 
         val requestBody: RequestBody
             get() = when (data) {
@@ -64,26 +66,32 @@ object http {
             /**
              * @see HttpFile
              */
-            fun get(file: File,
-                    contentType: String,
-                    name: String = file.name,
-                    alias: String = "file"): HttpFile = HttpFile(file, contentType, name, alias)
+            fun get(
+                file: File,
+                contentType: String,
+                name: String = file.name,
+                alias: String = "file"
+            ): HttpFile = HttpFile(file, contentType, name, alias)
 
             /**
              * @see HttpFile
              */
-            fun get(byteArray: ByteArray,
-                    contentType: String,
-                    name: String,
-                    alias: String = "file"): HttpFile = HttpFile(byteArray, contentType, name, alias)
+            fun get(
+                byteArray: ByteArray,
+                contentType: String,
+                name: String,
+                alias: String = "file"
+            ): HttpFile = HttpFile(byteArray, contentType, name, alias)
 
             /**
              * @see HttpFile
              */
-            fun get(inputStream: InputStream,
-                    contentType: String,
-                    name: String,
-                    alias: String = "file"): HttpFile = HttpFile(inputStream, contentType, name, alias)
+            fun get(
+                inputStream: InputStream,
+                contentType: String,
+                name: String,
+                alias: String = "file"
+            ): HttpFile = HttpFile(inputStream, contentType, name, alias)
         }
     }
 
@@ -95,8 +103,8 @@ object http {
      */
     @Suppress("unused")
     class AuthBasic(name: String, pass: String) : Auth(
-            key = "Authorization",
-            value = Credentials.basic(name, pass, charset("UTF-8"))
+        key = "Authorization",
+        value = Credentials.basic(name, pass, charset("UTF-8"))
     )
 
     /**
@@ -109,11 +117,12 @@ object http {
      * @property isOk simply validation of data: ``code == 200 && data != null``
      */
     data class Response<T>(
-            val data: T?,
-            val code: Int,
-            val exception: Throwable? = null,
-            val message: String?,
-            val headers: Headers? = null) {
+        val data: T?,
+        val code: Int,
+        val exception: Throwable? = null,
+        val message: String?,
+        val headers: Headers? = null
+    ) {
         @Suppress("unused")
         val isOk: Boolean
             get() = code == 200 && data != null
@@ -144,13 +153,13 @@ object http {
      * @see Utils.client
      */
     suspend inline fun <reified T : Any> get(
-            url: String,
-            queryParts: SortedMap<String, String> = sortedMapOf(),
-            headers: Map<String, String> = mapOf(),
-            auth: Auth? = null,
-            client: OkHttpClient = Utils.client,
-            loggerOUT: Boolean = false,
-            loggerIN: Boolean = false
+        url: String,
+        queryParts: SortedMap<String, String> = sortedMapOf(),
+        headers: Map<String, String> = mapOf(),
+        auth: Auth? = null,
+        client: OkHttpClient = Utils.client,
+        loggerOUT: Boolean = false,
+        loggerIN: Boolean = false
     ): Response<T> = withContext(Dispatchers.IO) {
 
         val id = Utils.requestID.getAndIncrement()
@@ -267,14 +276,14 @@ object http {
      */
     @Suppress("unused")
     suspend inline fun <reified T : Any> post(
-            url: String,
-            body: Any,
-            queryParts: SortedMap<String, String> = sortedMapOf(),
-            headers: Map<String, String> = mapOf(),
-            auth: Auth? = null,
-            client: OkHttpClient = Utils.client,
-            loggerOUT: Boolean = false,
-            loggerIN: Boolean = false
+        url: String,
+        body: Any,
+        queryParts: SortedMap<String, String> = sortedMapOf(),
+        headers: Map<String, String> = mapOf(),
+        auth: Auth? = null,
+        client: OkHttpClient = Utils.client,
+        loggerOUT: Boolean = false,
+        loggerIN: Boolean = false
     ): Response<T> = withContext(Dispatchers.IO) {
 
         val id = Utils.requestID.getAndIncrement()
@@ -292,17 +301,17 @@ object http {
                 }
                 is HttpFile -> {
                     val formBody: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
-                            .addFormDataPart(body.alias, body.name, body.requestBody)
-                            .build()
+                        .addFormDataPart(body.alias, body.name, body.requestBody)
+                        .build()
                     post(formBody)
                 }
                 is Map<*, *> -> {
                     val formBody = FormBody.Builder().apply {
                         body.filterKeys { it is String }
-                                .filterValues { it != null }
-                                .forEach {
-                                    add(it.key.toString(), it.value.toString())
-                                }
+                            .filterValues { it != null }
+                            .forEach {
+                                add(it.key.toString(), it.value.toString())
+                            }
                     }.build()
                     post(formBody)
                 }
@@ -351,37 +360,37 @@ object http {
          * customizable OkHttpClient instance
          */
         var client = OkHttpClient.Builder()
-                .connectTimeout(40L, TimeUnit.SECONDS)
-                .callTimeout(30L, TimeUnit.SECONDS)
-                .retryOnConnectionFailure(false)
-                .build()
+            .connectTimeout(40L, TimeUnit.SECONDS)
+            .callTimeout(30L, TimeUnit.SECONDS)
+            .retryOnConnectionFailure(false)
+            .build()
 
         /**
          * await on response from server as suspendCoroutine
          */
         suspend fun Call.await(): okhttp3.Response =
-                suspendCoroutine { content ->
-                    enqueue(object : Callback {
+            suspendCoroutine { content ->
+                enqueue(object : Callback {
 
-                        override fun onFailure(call: Call, e: IOException) {
-                            content.resumeWithException(e)
-                        }
+                    override fun onFailure(call: Call, e: IOException) {
+                        content.resumeWithException(e)
+                    }
 
-                        override fun onResponse(call: Call, response: okhttp3.Response) {
-                            content.resume(response)
-                        }
+                    override fun onResponse(call: Call, response: okhttp3.Response) {
+                        content.resume(response)
+                    }
 
-                    })
-                }
+                })
+            }
 
         /**
          * headers builder
          */
         fun Request.Builder.headersMapper(headers: Map<String, String>): Request.Builder {
             headers.filter { it.key.isNotEmpty() && it.value.isNotEmpty() }
-                    .forEach {
-                        addHeader(it.key, it.value)
-                    }
+                .forEach {
+                    addHeader(it.key, it.value)
+                }
             return this
         }
 
@@ -398,10 +407,10 @@ object http {
                     url + queryParts.map {
                         "${it.key}/${URLEncoder.encode(it.value, "UTF-8")}"
                     }.joinToString("/")
-                            .let {
-                                if (url.endsWith("/")) it
-                                else "/$it"
-                            }
+                        .let {
+                            if (url.endsWith("/")) it
+                            else "/$it"
+                        }
                 }
             } else url
         }
@@ -412,8 +421,8 @@ object http {
          */
         @Suppress("UNCHECKED_CAST")
         suspend fun <T : Any> buildResponse(
-                it: okhttp3.Response,
-                clazz: KClass<T>
+            it: okhttp3.Response,
+            clazz: KClass<T>
         ): Response<T> = withContext(Dispatchers.IO) {
 
             @Suppress("BlockingMethodInNonBlockingContext")
@@ -421,8 +430,18 @@ object http {
                 when (clazz) {
                     ByteArray::class -> {
                         it.body?.use { body ->
-                            Response(body.byteStream().readBytes() as T?, code = it.code, message = it.message, headers = it.headers)
-                        } ?: Response(null as T?, code = it.code, message = it.message, headers = it.headers)
+                            Response(
+                                body.byteStream().readBytes() as T?,
+                                code = it.code,
+                                message = it.message,
+                                headers = it.headers
+                            )
+                        } ?: Response(
+                            null as T?,
+                            code = it.code,
+                            message = it.message,
+                            headers = it.headers
+                        )
                     }
                     File::class -> {
 
@@ -454,15 +473,8 @@ object http {
                         )
                     }
                     Unit::class -> {
-                        it.body?.use { body ->
-                            Response(
-                                null as T?,
-                                it.code,
-                                message = it.message,
-                                headers = it.headers
-                            )
-                        } ?: Response(
-                            null as T?,
+                        Response(
+                            Any() as T?,
                             code = it.code,
                             message = it.message,
                             headers = it.headers
@@ -515,12 +527,13 @@ object http {
          * curl builder of request POST
          */
         fun loggerOutPOST(
-                id: Int,
-                url: String,
-                body: Any,
-                queryParts: SortedMap<String, String>,
-                headers: Map<String, String>,
-                auth: Auth?) {
+            id: Int,
+            url: String,
+            body: Any,
+            queryParts: SortedMap<String, String>,
+            headers: Map<String, String>,
+            auth: Auth?
+        ) {
 
             StringBuilder("($id) curl -X POST ").apply {
                 auth?.also {
@@ -551,11 +564,12 @@ object http {
          * curl builder of request GET
          */
         fun loggerOutGET(
-                id: Int,
-                url: String,
-                queryParts: SortedMap<String, String>,
-                headers: Map<String, String>,
-                auth: Auth?) {
+            id: Int,
+            url: String,
+            queryParts: SortedMap<String, String>,
+            headers: Map<String, String>,
+            auth: Auth?
+        ) {
 
             StringBuilder("($id) curl -X GET ").apply {
                 auth?.also {
@@ -576,7 +590,7 @@ object http {
         private val loggerMethod: Method? by lazy {
             try {
                 Class.forName("android.util.Log")
-                        .getDeclaredMethod("e", String::class.java, String::class.java)
+                    .getDeclaredMethod("e", String::class.java, String::class.java)
             } catch (e: Throwable) {
                 null
             }
