@@ -178,6 +178,57 @@ object http {
         }
     }
 
+    /**
+     * ### Request method type of HEAD
+     *
+     * @param url server url
+     * @param queryParts if url ends with '?' this parameters will be used as url...?key1=value1&key2=value2 otherwise  url.../key1/value1/key2/value2
+     * @param headers yours request headers
+     * @param auth helper for authentication see http.AuthBasic
+     * @param client jou can use your custom OkHttpClient instance, or use default http.Utils.client
+     * @param loggerOUT in console will be printed request
+     * @param loggerIN in console will be printed response
+     *
+     * @see AuthBasic
+     * @see Auth
+     * @see Utils.gson
+     * @see Utils.client
+     */
+    suspend inline fun head(
+        url: String,
+        queryParts: SortedMap<String, String> = sortedMapOf(),
+        headers: Map<String, String> = mapOf(),
+        auth: Auth? = null,
+        client: OkHttpClient = Utils.client,
+        loggerOUT: Boolean = false,
+        loggerIN: Boolean = false
+    ): Response<Unit> = withContext(Dispatchers.IO) {
+
+        val id = Utils.requestID.getAndIncrement()
+        if (loggerOUT) Utils.loggerOutGET(id, url, queryParts, headers, auth)
+
+        val request = Request.Builder().apply {
+            url(buildRequestUrl(url, queryParts))
+            headersMapper(headers)
+            head()
+            auth?.also {
+                addHeader(it.key, it.value)
+            }
+        }.build()
+
+
+        try {
+            buildResponse(client.newCall(request).await(), Unit::class).also {
+                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
+            }
+        } catch (e: Throwable) {
+            Response<Unit>(null, code = -1, exception = e, message = e.message).also {
+                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
+            }
+
+        }
+    }
+
 
     /**
      * ### Request method type of POST
@@ -380,27 +431,57 @@ object http {
                         if (!outFile.exists()) outFile.createNewFile()
 
                         buildResponseStreamConvert(it, outFile.outputStream())
-                        Response(outFile as T, code = it.code, message = it.message, headers = it.headers)
+                        Response(
+                            outFile as T,
+                            code = it.code,
+                            message = it.message,
+                            headers = it.headers
+                        )
                     }
                     String::class -> {
                         it.body?.use { body ->
                             Response(
-                                    String(body.byteStream().readBytes()) as T?,
-                                    it.code,
-                                    message = it.message,
-                                    headers = it.headers
+                                String(body.byteStream().readBytes()) as T?,
+                                it.code,
+                                message = it.message,
+                                headers = it.headers
                             )
-                        } ?: Response(null as T?, code = it.code, message = it.message, headers = it.headers)
+                        } ?: Response(
+                            null as T?,
+                            code = it.code,
+                            message = it.message,
+                            headers = it.headers
+                        )
+                    }
+                    Unit::class -> {
+                        it.body?.use { body ->
+                            Response(
+                                null as T?,
+                                it.code,
+                                message = it.message,
+                                headers = it.headers
+                            )
+                        } ?: Response(
+                            null as T?,
+                            code = it.code,
+                            message = it.message,
+                            headers = it.headers
+                        )
                     }
                     else -> {
                         it.body?.use { body ->
                             Response(
-                                    gson.fromJson(String(body.byteStream().readBytes()), clazz.java),
-                                    it.code,
-                                    message = it.message,
-                                    headers = it.headers
+                                gson.fromJson(String(body.byteStream().readBytes()), clazz.java),
+                                it.code,
+                                message = it.message,
+                                headers = it.headers
                             )
-                        } ?: Response(null as T?, code = it.code, message = it.message, headers = it.headers)
+                        } ?: Response(
+                            null as T?,
+                            code = it.code,
+                            message = it.message,
+                            headers = it.headers
+                        )
                     }
                 }
             } else {
