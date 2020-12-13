@@ -10,11 +10,11 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.internal.closeQuietly
-import tk.mallumo.http.http.Utils.MT_JSON
 import tk.mallumo.http.http.Utils.await
 import tk.mallumo.http.http.Utils.buildRequestUrl
 import tk.mallumo.http.http.Utils.buildResponse
 import tk.mallumo.http.http.Utils.headersMapper
+import tk.mallumo.http.http.Utils.internalRequestPostPut
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
@@ -238,6 +238,54 @@ object http {
         }
     }
 
+    /**
+     * ### Request method type of PUT
+     *
+     * #### Function requires type of response classes
+     *
+     * * ByteArray -> response cast read all bydes and forward back
+     * * String -> response is converted to string
+     * * File -> in temporary files will be created file and fill with response data
+     * * else -> String from server will be classified as json and convert into forwarded type object type
+     *
+     * #### Function requires body parameter
+     *
+     * * Map<*, *> -> parameters will be sent as form body parameters
+     * * okhttp3.MultipartBody -> send without modifications
+     * * okhttp3.FormBody -> send without modifications
+     * * String -> send as json with mime "application/json; charset=utf-8"
+     * * HttpFile -> file wrapper
+     * * Object -> convert into json and send with mime "application/json; charset=utf-8"
+     *
+     * @param url server url
+     * @param body see description above
+     * @param queryParts if url ends with '?' this parameters will be used as url...?key1=value1&key2=value2 otherwise  url.../key1/value1/key2/value2
+     * @param headers yours request headers
+     * @param auth helper for authentication see http.AuthBasic
+     * @param client jou can use your custom OkHttpClient instance, or use default http.Utils.client
+     * @param loggerOUT in console will be printed request
+     * @param loggerIN in console will be printed response
+     *
+     * @see Response
+     * @see AuthBasic
+     * @see Auth
+     * @see Utils.gson
+     * @see Utils.client
+     * @see HttpFile
+     */
+    @Suppress("unused")
+    suspend inline fun <reified T : Any> put(
+        url: String,
+        body: Any?,
+        queryParts: SortedMap<String, String> = sortedMapOf(),
+        headers: Map<String, String> = mapOf(),
+        auth: Auth? = null,
+        client: OkHttpClient = Utils.client,
+        loggerOUT: Boolean = false,
+        loggerIN: Boolean = false
+    ): Response<T> = withContext(Dispatchers.IO) {
+        internalRequestPostPut(false, T::class, url, body, queryParts, headers, auth, client, loggerOUT, loggerIN)
+    }
 
     /**
      * ### Request method type of POST
@@ -277,7 +325,7 @@ object http {
     @Suppress("unused")
     suspend inline fun <reified T : Any> post(
         url: String,
-        body: Any,
+        body: Any?,
         queryParts: SortedMap<String, String> = sortedMapOf(),
         headers: Map<String, String> = mapOf(),
         auth: Auth? = null,
@@ -286,56 +334,101 @@ object http {
         loggerIN: Boolean = false
     ): Response<T> = withContext(Dispatchers.IO) {
 
-        val id = Utils.requestID.getAndIncrement()
-        if (loggerOUT) Utils.loggerOutPOST(id, url, body, queryParts, headers, auth)
-
-        val request = Request.Builder().apply {
-            url(buildRequestUrl(url, queryParts))
-            headersMapper(headers)
-            when (body) {
-                is MultipartBody -> {
-                    post(body)
-                }
-                is FormBody -> {
-                    post(body)
-                }
-                is HttpFile -> {
-                    val formBody: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
-                        .addFormDataPart(body.alias, body.name, body.requestBody)
-                        .build()
-                    post(formBody)
-                }
-                is Map<*, *> -> {
-                    val formBody = FormBody.Builder().apply {
-                        body.filterKeys { it is String }
-                            .filterValues { it != null }
-                            .forEach {
-                                add(it.key.toString(), it.value.toString())
-                            }
-                    }.build()
-                    post(formBody)
-                }
-                is String -> post(body.toRequestBody(MT_JSON))
-                else -> post(Utils.gson.toJson(body).toRequestBody(MT_JSON))
-            }
-            auth?.also {
-                addHeader(it.key, it.value)
-            }
-        }.build()
-
-        try {
-            buildResponse(client.newCall(request).await(), T::class).also {
-                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
-            }
-        } catch (e: Throwable) {
-            Response<T>(null, -1, exception = e, message = e.message).also {
-                if (loggerIN) Utils.print("($id) ${Utils.gson.toJson(it)}")
-            }
-        }
+        internalRequestPostPut(true, T::class, url, body, queryParts, headers, auth, client, loggerOUT, loggerIN)
     }
 
 
     object Utils {
+
+        suspend fun <T : Any> internalRequestPostPut(
+            isPost: Boolean,
+            clazz: KClass<T>,
+            url: String,
+            body: Any?,
+            queryParts: SortedMap<String, String> = sortedMapOf(),
+            headers: Map<String, String> = mapOf(),
+            auth: Auth? = null,
+            client: OkHttpClient = Utils.client,
+            loggerOUT: Boolean = false,
+            loggerIN: Boolean = false
+        ): Response<T> = withContext(Dispatchers.IO) {
+            val id = requestID.getAndIncrement()
+            if (loggerOUT) loggerOutPOST(id, url, body, queryParts, headers, auth)
+
+            val request = Request.Builder().apply {
+                url(buildRequestUrl(url, queryParts))
+                headersMapper(headers)
+                if (body != null) {
+                    when (body) {
+                        is MultipartBody -> {
+                            if (isPost) {
+                                post(body)
+                            } else {
+                                put(body)
+                            }
+                        }
+                        is FormBody -> {
+                            if (isPost) {
+                                post(body)
+                            } else {
+                                put(body)
+                            }
+                        }
+                        is HttpFile -> {
+                            val formBody: RequestBody = MultipartBody.Builder().setType(MultipartBody.FORM)
+                                .addFormDataPart(body.alias, body.name, body.requestBody)
+                                .build()
+                            if (isPost) {
+                                post(formBody)
+                            } else {
+                                put(formBody)
+                            }
+                        }
+                        is Map<*, *> -> {
+                            val formBody = FormBody.Builder().apply {
+                                body.filterKeys { it is String }
+                                    .filterValues { it != null }
+                                    .forEach {
+                                        add(it.key.toString(), it.value.toString())
+                                    }
+                            }.build()
+                            if (isPost) {
+                                post(formBody)
+                            } else {
+                                put(formBody)
+                            }
+                        }
+                        is String -> {
+                            if (isPost) {
+                                post(body.toRequestBody(MT_JSON))
+                            } else {
+                                put(body.toRequestBody(MT_JSON))
+                            }
+                        }
+                        else -> {
+                            if (isPost) {
+                                post(gson.toJson(body).toRequestBody(MT_JSON))
+                            } else {
+                                put(gson.toJson(body).toRequestBody(MT_JSON))
+                            }
+                        }
+                    }
+                }
+                auth?.also {
+                    addHeader(it.key, it.value)
+                }
+            }.build()
+
+            try {
+                buildResponse(client.newCall(request).await(), clazz).also {
+                    if (loggerIN) print("($id) ${gson.toJson(it)}")
+                }
+            } catch (e: Throwable) {
+                Response<T>(null, -1, exception = e, message = e.message).also {
+                    if (loggerIN) print("($id) ${gson.toJson(it)}")
+                }
+            }
+        }
 
         /**
          * used for logging request, every request ginned atomic id, useful in multiple parallel requests
@@ -529,7 +622,7 @@ object http {
         fun loggerOutPOST(
             id: Int,
             url: String,
-            body: Any,
+            body: Any?,
             queryParts: SortedMap<String, String>,
             headers: Map<String, String>,
             auth: Auth?

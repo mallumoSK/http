@@ -23,16 +23,10 @@ class TestHEAD {
     @Test
     fun registerSuccessRequest() {
         runBlocking {
-            http.head("http://192.168.100.111/download/%5bEMBER%5d%20King's%20Raid%20-%20Ishi%20o%20Tsugu%20Mono-tachi%20-%2004.mkv")
+            http.head("https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Eichh%C3%B6rnchen_D%C3%BCsseldorf_Hofgarten_edit.jpg/250px-Eichh%C3%B6rnchen_D%C3%BCsseldorf_Hofgarten_edit.jpg")
                 .also {
                     println(http.Utils.gson.toJson(it))
                     assert(it.code == 200)
-                }
-
-            http.head("http://168.100.111/download/%5bEMBER%5d%20King's%20Raid%20-%20Ishi%20o%20Tsugu%20Mono-tachi%20-%2004.mkv")
-                .also {
-                    println(http.Utils.gson.toJson(it))
-                    assert(it.code != 200)
                 }
         }
     }
@@ -50,6 +44,18 @@ class TestHEAD {
                 val resp = http.head(it)
                 println("$it : ${resp.isOk}-> ${http.Utils.gson.toJson(resp)}")
             }
+        }
+    }
+
+    @Test
+    fun registerSuccessRequest2() {
+        runBlocking {
+            http.head("https://upload.wikimedia.org/wikipedia/commons/thumb/f/f6/Eastern_Gray_Squirrel_800.jpg/220px-Eastern_Gray_Squirrel_800.jpg")
+                .also {
+                    println(http.Utils.gson.toJson(it))
+                    println(it.headers?.get("Content-Type"))
+                    assert(it.code == 200)
+                }
         }
     }
 }
